@@ -69,6 +69,23 @@ function bankColorFor(bank: string, fallback = '#7C3AED') {
   return fallback;
 }
 
+// Logos disponíveis no projeto (evitar apontar para arquivos inexistentes)
+const BANK_LOGOS: Record<string, string> = {
+  itau: '/banks/itau.svg',
+  nubank: '/banks/nubank.svg',
+  'banco do brasil': '/banks/bb.svg',
+  bb: '/banks/bb.svg',
+};
+
+function bankLogoFor(bank: string): string | null {
+  const key = normalizeBankName(bank);
+  if (BANK_LOGOS[key]) return BANK_LOGOS[key];
+  if (key.includes('itau')) return BANK_LOGOS.itau;
+  if (key.includes('nubank')) return BANK_LOGOS.nubank;
+  if (key.includes('banco do brasil') || key === 'bb') return BANK_LOGOS['banco do brasil'];
+  return null;
+}
+
 function monthKey(d: Date) {
   return format(d, 'yyyy-MM');
 }
@@ -313,8 +330,13 @@ export default function CartoesPage() {
         {cards.map(c => (
           <div key={c.id} className="card p-4 flex items-center justify-between gap-3" style={{ borderColor: c.color }}>
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-md flex items-center justify-center" style={{ backgroundColor: c.color }}>
-                <CreditCard className="size-5 text-white" />
+              <div className="size-10 rounded-md flex items-center justify-center overflow-hidden" style={{ backgroundColor: c.color }}>
+                {bankLogoFor(c.bank) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={bankLogoFor(c.bank) as string} alt="logo" className="w-8 h-8 object-contain" />
+                ) : (
+                  <CreditCard className="size-5 text-white" />
+                )}
               </div>
               <div>
                 <p className="font-semibold">{c.name}</p>
@@ -431,6 +453,15 @@ export default function CartoesPage() {
                     if (!cardColorTouched) setCardColor(bankColorFor(v));
                   }}
                 />
+                {cardBank && (
+                  <div className="mt-2 inline-flex items-center gap-2 text-xs text-muted">
+                    {bankLogoFor(cardBank) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={bankLogoFor(cardBank) as string} alt="logo" className="w-5 h-5 object-contain" />
+                    )}
+                    <span>Pré-visualização da identidade do banco</span>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-sm text-muted">Cor do banco</label>
