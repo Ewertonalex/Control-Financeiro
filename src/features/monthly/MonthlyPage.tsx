@@ -21,6 +21,7 @@ export function MonthlyPage() {
   const [notice, setNotice] = useState<null | { message: string; type: 'success' | 'info' | 'danger' }>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
   const STORAGE_KEY = 'controle-financeiro:v1';
+  const [hydrated, setHydrated] = useState(false);
 
   const key = useMemo(() => format(currentMonth, 'yyyy-MM'), [currentMonth]);
   const transactions = transactionsByMonth[key] ?? [];
@@ -33,13 +34,15 @@ export function MonthlyPage() {
         setTransactionsByMonth(parsed);
       }
     } catch {}
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(transactionsByMonth));
     } catch {}
-  }, [transactionsByMonth]);
+  }, [transactionsByMonth, hydrated]);
 
   const totalIncome = useMemo(
     () => transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
