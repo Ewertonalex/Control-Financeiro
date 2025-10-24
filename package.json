@@ -2,12 +2,18 @@
   "name": "controle-financeiro",
   "version": "1.0.0",
   "description": "Controle Financeiro mensal com Next.js e Tailwind",
-  "main": "next.config.mjs",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "export": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "dev:electron": "concurrently -k -r \"npm:dev\" \"npm:electron\"",
+    "electron": "wait-on http://localhost:3000 && electron .",
+    "build:electron": "npm run export && electron-builder -c electron-builder.json"
   },
   "keywords": [],
   "author": "",
@@ -25,11 +31,17 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^1.5.10",
     "@tailwindcss/postcss": "^4.1.16",
     "@types/html2canvas": "^1.0.0",
     "@types/node": "^24.9.1",
     "@types/react": "^19.2.2",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.2",
+    "electron-builder": "^24.13.3",
     "autoprefixer": "^10.4.21",
+    "serve-handler": "^6.1.5",
+    "wait-on": "^7.2.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3"

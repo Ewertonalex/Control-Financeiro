@@ -31,3 +31,9 @@ pnpm-debug.log*
 coverage/
 .npm-cache/
 
+out/
+dist-electron/
+src-tauri/target/
+*.dmg
+*.exe
+*.msi

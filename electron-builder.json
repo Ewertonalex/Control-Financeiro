@@ -1,0 +1,26 @@
+{
+  "appId": "com.ewerton.controlefinanceiro",
+  "productName": "Controle Financeiro",
+  "files": [
+    "out/**",
+    "electron/**",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.productivity",
+    "icon": "build/icons/icon.icns"
+  },
+  "win": {
+    "target": ["nsis"],
+    "publisherName": "Ewerton",
+    "icon": "build/icons/icon.ico"
+  },
+  "directories": {
+    "output": "dist-electron"
+  }
+}
+
