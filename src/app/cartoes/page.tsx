@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addMonths, differenceInCalendarMonths, format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard, Edit3, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard, Edit3, Plus, Trash2, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { Chart as ChartJS, LineElement, CategoryScale, LinearScale, PointElement, Legend, Tooltip } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
@@ -105,6 +105,7 @@ export default function CartoesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [notice, setNotice] = useState<null | { message: string; type: 'success' | 'info' | 'danger' }>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [sortDesc, setSortDesc] = useState(true);
 
   // formularios
   const [cardModalOpen, setCardModalOpen] = useState(false);
@@ -122,8 +123,18 @@ export default function CartoesPage() {
   const [purchaseCurrentInstallment, setPurchaseCurrentInstallment] = useState('1');
   const [purchaseInstallmentAmount, setPurchaseInstallmentAmount] = useState('');
 
-  // persistência
+  // persistência: Electron (IPC) ou localStorage
   useEffect(() => {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.cards && api?.purchases) {
+      (async () => {
+        const [cs, ps] = await Promise.all([api.cards.get(), api.purchases.get()]);
+        setCards(cs ?? []);
+        setPurchases(ps ?? []);
+        setHydrated(true);
+      })();
+      return;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -137,9 +148,10 @@ export default function CartoesPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ cards, purchases }));
-    } catch {}
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (!api?.cards || !api?.purchases) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ cards, purchases })); } catch {}
+    }
   }, [cards, purchases, hydrated]);
 
   const currentKey = useMemo(() => monthKey(nowMonth), [nowMonth]);
@@ -188,24 +200,39 @@ export default function CartoesPage() {
     setCardColorTouched(true);
     setCardModalOpen(true);
   }
-  function saveCard() {
+  async function saveCard() {
     const name = cardName.trim();
     const bank = cardBank.trim();
     if (!name || !bank) return;
     const color = cardColorTouched ? (cardColor || '#7C3AED') : bankColorFor(bank, cardColor || '#7C3AED');
-    if (editingCard) {
-      setCards(prev => prev.map(c => (c.id === editingCard.id ? { ...c, name, bank, color } : c)));
-      notify('Cartão atualizado.', 'success');
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    const card = editingCard ? { ...editingCard, name, bank, color } : { id: crypto.randomUUID(), name, bank, color };
+    if (api?.cards) {
+      const list = await api.cards.upsert(card);
+      setCards(list ?? []);
+      notify(editingCard ? 'Cartão atualizado.' : 'Cartão criado.', 'success');
     } else {
-      setCards(prev => [...prev, { id: crypto.randomUUID(), name, bank, color }]);
-      notify('Cartão criado.', 'success');
+      if (editingCard) {
+        setCards(prev => prev.map(c => (c.id === editingCard.id ? { ...c, name, bank, color } : c)));
+        notify('Cartão atualizado.', 'success');
+      } else {
+        setCards(prev => [...prev, card as Card]);
+        notify('Cartão criado.', 'success');
+      }
     }
     setCardModalOpen(false);
     setEditingCard(null);
   }
-  function removeCard(id: string) {
-    setCards(prev => prev.filter(c => c.id !== id));
-    setPurchases(prev => prev.filter(p => p.cardId !== id));
+  async function removeCard(id: string) {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.cards) {
+      const r = await api.cards.remove(id);
+      setCards(r.cards ?? []);
+      setPurchases(r.purchases ?? []);
+    } else {
+      setCards(prev => prev.filter(c => c.id !== id));
+      setPurchases(prev => prev.filter(p => p.cardId !== id));
+    }
     notify('Cartão excluído.', 'info');
   }
 
@@ -228,7 +255,7 @@ export default function CartoesPage() {
     setPurchaseInstallmentAmount(String(p.installmentAmount));
     setPurchaseModalOpen(true);
   }
-  function savePurchase() {
+  async function savePurchase() {
     if (!purchaseCardId) return;
     const title = purchaseTitle.trim();
     if (!title) return;
@@ -236,29 +263,34 @@ export default function CartoesPage() {
     const currentInstallmentAtStart = Math.max(1, Math.min(Number(purchaseCurrentInstallment), totalInstallments));
     const installmentAmount = Number(purchaseInstallmentAmount.replace(/\./g, '').replace(',', '.')) || Number(purchaseInstallmentAmount);
     if (!Number.isFinite(installmentAmount) || installmentAmount <= 0) return;
-    if (editingPurchase) {
-      setPurchases(prev => prev.map(p => (p.id === editingPurchase.id ? { ...p, cardId: purchaseCardId, title, totalInstallments, currentInstallmentAtStart, installmentAmount } : p)));
-      notify('Compra atualizada.', 'success');
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    const purchase = editingPurchase ?
+      { ...editingPurchase, cardId: purchaseCardId, title, totalInstallments, currentInstallmentAtStart, installmentAmount } :
+      { id: crypto.randomUUID(), cardId: purchaseCardId, title, startMonthKey: currentKey, totalInstallments, currentInstallmentAtStart, installmentAmount };
+    if (api?.purchases) {
+      const list = await api.purchases.upsert(purchase);
+      setPurchases(list ?? []);
+      notify(editingPurchase ? 'Compra atualizada.' : 'Compra adicionada.', 'success');
     } else {
-      setPurchases(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          cardId: purchaseCardId,
-          title,
-          startMonthKey: currentKey,
-          totalInstallments,
-          currentInstallmentAtStart,
-          installmentAmount,
-        },
-      ]);
-      notify('Compra adicionada.', 'success');
+      if (editingPurchase) {
+        setPurchases(prev => prev.map(p => (p.id === (purchase as Purchase).id ? (purchase as Purchase) : p)));
+        notify('Compra atualizada.', 'success');
+      } else {
+        setPurchases(prev => [...prev, purchase as Purchase]);
+        notify('Compra adicionada.', 'success');
+      }
     }
     setPurchaseModalOpen(false);
     setEditingPurchase(null);
   }
-  function removePurchase(id: string) {
-    setPurchases(prev => prev.filter(p => p.id !== id));
+  async function removePurchase(id: string) {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.purchases) {
+      const list = await api.purchases.remove(id);
+      setPurchases(list ?? []);
+    } else {
+      setPurchases(prev => prev.filter(p => p.id !== id));
+    }
     notify('Compra excluída.', 'info');
   }
 
@@ -308,6 +340,17 @@ export default function CartoesPage() {
     return { labels: months, datasets };
   }, [nowMonth, purchases, cards]);
 
+  // agrupado por cartão para exibição em colunas
+  const groupedByCard = useMemo(() => {
+    return cards.map(card => {
+      const rows = monthlyRows
+        .filter(r => r.card?.id === card.id)
+        .slice()
+        .sort((a, b) => sortDesc ? (b.p.installmentAmount - a.p.installmentAmount) : (a.p.installmentAmount - b.p.installmentAmount));
+      return { card, rows };
+    });
+  }, [cards, monthlyRows, sortDesc]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -321,6 +364,14 @@ export default function CartoesPage() {
           </button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className="btn-outline"
+            onClick={() => setSortDesc(v => !v)}
+            title={sortDesc ? 'Ordenar: maior → menor' : 'Ordenar: menor → maior'}
+            aria-label="Ordenar compras por valor"
+          >
+            {sortDesc ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />} Ordenar
+          </button>
           <button className="btn-outline" onClick={openNewCard}><Plus className="size-4" /> Novo cartão</button>
           <button className="btn-primary" onClick={openNewPurchase}><Plus className="size-4" /> Nova compra</button>
         </div>
@@ -369,48 +420,52 @@ export default function CartoesPage() {
         </div>
       </div>
 
-      <div className="card p-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-muted">
-              <th className="py-2 pr-3">Cartão</th>
-              <th className="py-2 pr-3">Compra</th>
-              <th className="py-2 pr-3">Parcela</th>
-              <th className="py-2 pr-3">Restantes</th>
-              <th className="py-2 pr-3">Valor parcela</th>
-              <th className="py-2 pr-3">Valor total</th>
-              <th className="py-2 pr-3">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10">
-            {monthlyRows.length === 0 && (
-              <tr>
-                <td className="py-6 text-center text-muted" colSpan={7}>Sem compras ativas neste mês.</td>
-              </tr>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {groupedByCard.map(({ card, rows }) => (
+          <div key={card.id} className="card p-4" style={{ borderColor: card.color }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-9 rounded-md flex items-center justify-center overflow-hidden" style={{ backgroundColor: card.color }}>
+                {bankLogoFor(card.bank) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={bankLogoFor(card.bank) as string} alt="logo" className="w-6 h-6 object-contain" />
+                ) : (
+                  <CreditCard className="size-4 text-white" />
+                )}
+              </div>
+              <div>
+                <p className="font-semibold">{card.name}</p>
+                <p className="text-xs text-muted">{card.bank}</p>
+              </div>
+              <div className="ml-auto text-sm font-semibold" style={{ color: card.color }}>
+                {(totalsByCard.get(card.id) ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </div>
+            </div>
+
+            {rows.length === 0 ? (
+              <p className="text-xs text-muted py-6 text-center">Sem compras ativas neste mês.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {rows.map(({ p, idx, remaining, totalValue }) => (
+                  <li key={p.id} className="py-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.title}</p>
+                      <div className="text-xs text-muted mt-0.5 flex flex-wrap gap-3">
+                        <span>Parcela {idx}/{p.totalInstallments}</span>
+                        <span>Restantes: {remaining}</span>
+                        <span>Parcela: {p.installmentAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <span>Total: {totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <button className="btn-outline" onClick={() => openEditPurchase(p)} aria-label="Editar"><Edit3 className="size-4" /></button>
+                      <button className="btn-outline" onClick={() => removePurchase(p.id)} aria-label="Excluir"><Trash2 className="size-4" /></button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-            {monthlyRows.map(({ p, card, idx, remaining, totalValue }) => (
-              <tr key={p.id}>
-                <td className="py-3 pr-3 align-top">
-                  <div className="inline-flex items-center gap-2">
-                    <span className="inline-block size-3 rounded" style={{ backgroundColor: card?.color }} />
-                    <span>{card?.name ?? '—'}</span>
-                  </div>
-                </td>
-                <td className="py-3 pr-3 align-top">{p.title}</td>
-                <td className="py-3 pr-3 align-top">{idx}/{p.totalInstallments}</td>
-                <td className="py-3 pr-3 align-top">{remaining}</td>
-                <td className="py-3 pr-3 align-top">{p.installmentAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                <td className="py-3 pr-3 align-top">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                <td className="py-3 pr-3 align-top">
-                  <div className="flex items-center gap-2">
-                    <button className="btn-outline" onClick={() => openEditPurchase(p)} aria-label="Editar"><Edit3 className="size-4" /></button>
-                    <button className="btn-outline" onClick={() => removePurchase(p.id)} aria-label="Excluir"><Trash2 className="size-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
 
       <div className="card p-4">
@@ -490,11 +545,42 @@ export default function CartoesPage() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-muted">Cartão</label>
-                <select className="mt-1 w-full rounded-lg bg-black/20 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-white/20" value={purchaseCardId} onChange={e => setPurchaseCardId(e.target.value)}>
-                  {cards.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} · {c.bank}</option>
-                  ))}
-                </select>
+                {cards.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted">Nenhum cartão cadastrado. Cadastre um cartão para vincular a compra.</p>
+                ) : (
+                  <div role="radiogroup" className="mt-2 grid grid-cols-2 gap-3">
+                    {cards.map(c => {
+                      const selected = purchaseCardId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setPurchaseCardId(c.id)}
+                          className={
+                            "card p-3 flex items-center gap-3 text-left transition border " +
+                            (selected ? "ring-2 ring-primary border-primary" : "hover:bg-white/5 border-white/10")
+                          }
+                          style={{ borderColor: selected ? c.color : undefined }}
+                        >
+                          <div className="size-8 rounded-md flex items-center justify-center overflow-hidden" style={{ backgroundColor: c.color }}>
+                            {bankLogoFor(c.bank) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={bankLogoFor(c.bank) as string} alt="logo" className="w-6 h-6 object-contain" />
+                            ) : (
+                              <CreditCard className="size-4 text-white" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{c.name}</p>
+                            <p className="text-[11px] text-muted truncate">{c.bank}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-sm text-muted">Descrição</label>

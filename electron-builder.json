@@ -11,13 +11,11 @@
   },
   "mac": {
     "target": ["dmg"],
-    "category": "public.app-category.productivity",
-    "icon": "build/icons/icon.icns"
+    "category": "public.app-category.productivity"
   },
   "win": {
     "target": ["nsis"],
-    "publisherName": "Ewerton",
-    "icon": "build/icons/icon.ico"
+    "publisherName": "Ewerton"
   },
   "directories": {
     "output": "dist-electron"

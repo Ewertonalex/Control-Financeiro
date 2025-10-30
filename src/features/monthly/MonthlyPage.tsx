@@ -25,8 +25,18 @@ export function MonthlyPage() {
 
   const key = useMemo(() => format(currentMonth, 'yyyy-MM'), [currentMonth]);
   const transactions = transactionsByMonth[key] ?? [];
-  // Persistência em localStorage
+  // Persistência: Electron (IPC) ou localStorage
   useEffect(() => {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      (async () => {
+        const currentKey = format(new Date(), 'yyyy-MM');
+        const data = await api.monthly.get(currentKey);
+        setTransactionsByMonth({ [currentKey]: data });
+        setHydrated(true);
+      })();
+      return;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -39,10 +49,21 @@ export function MonthlyPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(transactionsByMonth));
-    } catch {}
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (!api?.monthly) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(transactionsByMonth)); } catch {}
+    }
   }, [transactionsByMonth, hydrated]);
+
+  // Carregar dados ao mudar de mês no Electron
+  useEffect(() => {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (!api?.monthly) return;
+    (async () => {
+      const data = await api.monthly.get(key);
+      setTransactionsByMonth(prev => ({ ...prev, [key]: data }));
+    })();
+  }, [key]);
 
   const totalIncome = useMemo(
     () => transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
@@ -63,36 +84,61 @@ export function MonthlyPage() {
     setCurrentMonth(prev => addMonths(prev, diff));
   }
 
-  function upsert(tx: Transaction) {
-    setTransactionsByMonth(prev => {
-      const list = prev[key] ? [...prev[key]] : [];
-      const idx = list.findIndex(i => i.id === tx.id);
-      if (idx >= 0) list[idx] = tx; else list.push(tx);
-      return { ...prev, [key]: list };
-    });
+  async function upsert(tx: Transaction) {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      const list = await api.monthly.upsert(key, tx);
+      setTransactionsByMonth(prev => ({ ...prev, [key]: list }));
+    } else {
+      setTransactionsByMonth(prev => {
+        const list = prev[key] ? [...prev[key]] : [];
+        const idx = list.findIndex(i => i.id === tx.id);
+        if (idx >= 0) list[idx] = tx; else list.push(tx);
+        return { ...prev, [key]: list };
+      });
+    }
   }
 
-  function remove(id: string) {
-    setTransactionsByMonth(prev => {
-      const list = (prev[key] ?? []).filter(t => t.id !== id);
-      return { ...prev, [key]: list };
-    });
+  async function remove(id: string) {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      const list = await api.monthly.remove(key, id);
+      setTransactionsByMonth(prev => ({ ...prev, [key]: list }));
+    } else {
+      setTransactionsByMonth(prev => {
+        const list = (prev[key] ?? []).filter(t => t.id !== id);
+        return { ...prev, [key]: list };
+      });
+    }
   }
 
-  function togglePaid(id: string) {
-    setTransactionsByMonth(prev => {
-      const list = (prev[key] ?? []).map(t => t.id === id ? { ...t, paid: !(t.paid ?? false) } : t);
-      return { ...prev, [key]: list };
-    });
+  async function togglePaid(id: string) {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      const list = await api.monthly.togglePaid(key, id);
+      setTransactionsByMonth(prev => ({ ...prev, [key]: list }));
+    } else {
+      setTransactionsByMonth(prev => {
+        const list = (prev[key] ?? []).map(t => t.id === id ? { ...t, paid: !(t.paid ?? false) } : t);
+        return { ...prev, [key]: list };
+      });
+    }
   }
 
-  function replicateToNextMonth() {
+  async function replicateToNextMonth() {
     const nextKey = format(addMonths(currentMonth, 1), 'yyyy-MM');
-    setTransactionsByMonth(prev => {
-      const nextList = (prev[nextKey] ?? []);
-      const cloned = transactions.map(t => ({ ...t, id: crypto.randomUUID() }));
-      return { ...prev, [nextKey]: [...nextList, ...cloned] };
-    });
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      await api.monthly.replicate(key, nextKey);
+      const data = await api.monthly.get(nextKey);
+      setTransactionsByMonth(prev => ({ ...prev, [nextKey]: data }));
+    } else {
+      setTransactionsByMonth(prev => {
+        const nextList = (prev[nextKey] ?? []);
+        const cloned = transactions.map(t => ({ ...t, id: crypto.randomUUID() }));
+        return { ...prev, [nextKey]: [...nextList, ...cloned] };
+      });
+    }
     notify(`Dados replicados para ${format(addMonths(currentMonth, 1), "LLLL 'de' yyyy", { locale: ptBR })}.`, 'success');
   }
 
@@ -136,7 +182,11 @@ export function MonthlyPage() {
     notify('PDF exportado com sucesso.', 'success');
   }
 
-  function clearCurrentMonth() {
+  async function clearCurrentMonth() {
+    const api = (typeof window !== 'undefined' ? (window as any).api : null);
+    if (api?.monthly) {
+      await api.monthly.clear(key);
+    }
     setTransactionsByMonth(prev => ({ ...prev, [key]: [] }));
     notify('Dados do mês atual foram limpos.', 'info');
   }

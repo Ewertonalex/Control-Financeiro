@@ -1,8 +1,9 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const url = require('url');
+const store = require('./db');
 
 function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -121,6 +122,21 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+  // IPC - Monthly
+  ipcMain.handle('monthly:get', (_evt, monthKey) => store.getMonthly(monthKey));
+  ipcMain.handle('monthly:upsert', (_evt, monthKey, tx) => store.upsertTransaction(monthKey, tx));
+  ipcMain.handle('monthly:remove', (_evt, monthKey, id) => store.removeTransaction(monthKey, id));
+  ipcMain.handle('monthly:togglePaid', (_evt, monthKey, id) => store.togglePaid(monthKey, id));
+  ipcMain.handle('monthly:replicate', (_evt, srcKey, dstKey) => store.replicateMonth(srcKey, dstKey));
+  ipcMain.handle('monthly:clear', (_evt, key) => store.clearMonth(key));
+  // IPC - Cards
+  ipcMain.handle('cards:get', () => store.getCards());
+  ipcMain.handle('cards:upsert', (_evt, card) => store.upsertCard(card));
+  ipcMain.handle('cards:remove', (_evt, id) => store.removeCard(id));
+  // IPC - Purchases
+  ipcMain.handle('purchases:get', () => store.getPurchases());
+  ipcMain.handle('purchases:upsert', (_evt, p) => store.upsertPurchase(p));
+  ipcMain.handle('purchases:remove', (_evt, id) => store.removePurchase(id));
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
