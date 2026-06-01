@@ -1,0 +1,148 @@
+@import 'tailwindcss';
+@source "../app";
+@source "../components";
+@source "../features";
+@source "../context";
+@source "../config";
+
+@theme {
+  --color-primary: #7C3AED;
+  --color-primary-foreground: #ffffff;
+  --color-success: #10B981;
+  --color-danger: #EF4444;
+  --color-warning: #F59E0B;
+  --color-muted: #64748B;
+  --color-bg: #0B1220;
+  --color-card: #111827;
+
+  --shadow-soft: 0 10px 25px -10px rgba(0,0,0,0.35);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-white antialiased overflow-x-hidden;
+}
+
+.card {
+  @apply bg-card/70 backdrop-blur rounded-xl shadow-soft border border-white/5;
+}
+
+.btn {
+  @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90;
+}
+
+.btn-outline {
+  @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors border border-white/10 hover:bg-white/5;
+}
+
+/* Estilos seguros para exportação (evitam color-mix/oklab) */
+.print-safe {
+  background-color: #0B1220 !important;
+  color: #ffffff !important;
+}
+.print-safe .card,
+.print-safe .bg-card {
+  background-color: rgba(17, 24, 39, 0.7) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: none !important;
+}
+.print-safe * {
+  background-image: none !important;
+  filter: none !important;
+}
+.print-safe .btn-primary {
+  background-color: #7C3AED !important;
+  color: #ffffff !important;
+}
+.print-safe .btn-outline {
+  background-color: transparent !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.print-safe input {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.print-safe .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ===== LIGHT MODE ===== */
+html.light-mode {
+  color-scheme: light;
+  --color-bg: #F1F5F9;
+  --color-card: #FFFFFF;
+}
+
+html.light-mode body {
+  background-color: #F1F5F9;
+  color: #0F172A;
+}
+
+html.light-mode .card {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #0F172A;
+}
+
+html.light-mode aside {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light-mode .sticky {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light-mode .btn-outline {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #374151 !important;
+}
+
+html.light-mode .btn-outline:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light-mode input:not([type="color"]),
+html.light-mode select,
+html.light-mode textarea {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #0F172A !important;
+}
+
+html.light-mode input::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.light-mode .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 0, 0, 0.07) !important;
+}
+
+html.light-mode h1,
+html.light-mode h2,
+html.light-mode h3,
+html.light-mode p,
+html.light-mode li,
+html.light-mode span:not([class*="text-success"]):not([class*="text-danger"]):not([class*="text-warning"]):not([class*="text-primary"]):not([class*="text-muted"]):not([class*="text-white"]) {
+  color: #0F172A;
+}
+
+html.light-mode nav a {
+  color: #374151;
+}
+
+html.light-mode nav a:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
